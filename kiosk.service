@@ -1,0 +1,23 @@
+[Unit]
+Description=LJFD Kiosk Display
+After=network-online.target systemd-resolved.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=kiosk
+ExecStart=/usr/bin/startx -- -nocursor
+Restart=always
+RestartSec=5
+StandardInput=tty
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+Environment=HOME=/home/kiosk
+Environment=XAUTHORITY=/home/kiosk/.Xauthority
+ProtectSystem=strict
+ReadWritePaths=/home/kiosk /var/log /tmp
+PrivateTmp=false
+
+[Install]
+WantedBy=multi-user.target
