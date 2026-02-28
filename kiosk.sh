@@ -49,9 +49,17 @@ fi
 # Binary name varies: 'chromium-browser' (Bullseye) vs 'chromium' (Bookworm+)
 CHROMIUM_BIN=$(command -v chromium-browser 2>/dev/null || command -v chromium)
 
+# Get screen resolution to force Chromium to fill the display
+SCREEN_RES=$(xrandr | grep '\*' | awk '{print $1}')
+SCREEN_W=$(echo "$SCREEN_RES" | cut -d'x' -f1)
+SCREEN_H=$(echo "$SCREEN_RES" | cut -d'x' -f2)
+echo "$(date): Screen resolution: ${SCREEN_W}x${SCREEN_H}" >> "$LOG"
+
 exec "$CHROMIUM_BIN" \
     --kiosk \
     --start-fullscreen \
+    --window-position=0,0 \
+    --window-size=${SCREEN_W},${SCREEN_H} \
     --noerrdialogs \
     --disable-infobars \
     --disable-translate \
