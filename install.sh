@@ -29,13 +29,21 @@ apt-get update -qq
 
 # --- Step 2: Install minimal packages ---
 echo "[2/7] Installing minimal X11 and Chromium packages..."
+
+# Chromium package name varies: 'chromium-browser' (Bullseye) vs 'chromium' (Bookworm+)
+if apt-cache show chromium-browser &>/dev/null; then
+    CHROMIUM_PKG="chromium-browser"
+else
+    CHROMIUM_PKG="chromium"
+fi
+
 apt-get install --no-install-recommends -y \
     xserver-xorg-core \
     xserver-xorg-video-fbdev \
     xserver-xorg-input-libinput \
     xinit \
     x11-xserver-utils \
-    chromium-browser
+    "$CHROMIUM_PKG"
 
 # --- Step 3: Create kiosk user ---
 echo "[3/7] Creating kiosk user..."

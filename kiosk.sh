@@ -46,7 +46,10 @@ if [ -f "$CHROMIUM_STATE" ]; then
 fi
 
 # --- Launch Chromium in kiosk mode ---
-exec chromium-browser \
+# Binary name varies: 'chromium-browser' (Bullseye) vs 'chromium' (Bookworm+)
+CHROMIUM_BIN=$(command -v chromium-browser 2>/dev/null || command -v chromium)
+
+exec "$CHROMIUM_BIN" \
     --kiosk \
     --start-fullscreen \
     --noerrdialogs \
