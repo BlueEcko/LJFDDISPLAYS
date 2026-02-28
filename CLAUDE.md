@@ -17,8 +17,8 @@ Raspberry Pi 5 kiosk display system. Turns a Pi running Pi OS Lite into a full-s
 
 ## File Roles
 
-- `install.sh` — One-time setup script. Run as root on fresh Pi OS Lite. Installs 6 packages, creates kiosk user, deploys all files, enables the systemd service.
-- `kiosk.sh` — Kiosk launcher. Installed as `/home/kiosk/.xinitrc`. Sources the config, disables DPMS, cleans Chromium crash state, exec's Chromium.
+- `install.sh` — One-time setup script. Run as root on fresh Pi OS Lite. Installs packages, creates kiosk user, deploys all files, enables the systemd service. Auto-detects Chromium package name (`chromium` vs `chromium-browser`).
+- `kiosk.sh` — Kiosk launcher. Installed as `/home/kiosk/.xinitrc`. Sources the config, disables DPMS, detects screen resolution via xrandr, cleans Chromium crash state, exec's Chromium with `--window-size` to fill the display.
 - `kiosk.service` — systemd unit. Runs `startx -- -nocursor` as the kiosk user on tty1. `Restart=always` for crash recovery.
 - `kiosk.conf` — URL configuration template. Installed to `/boot/firmware/kiosk.conf`. Two URL slots with an `ACTIVE_URL` selector.
 
@@ -40,6 +40,19 @@ Useful commands (on the Pi via SSH):
 - `cat /var/log/kiosk.log` — kiosk script logs
 - `sudo systemctl restart kiosk` — restart after config change
 - `sudo systemctl status kiosk` — check service status
+- `sudo -u kiosk DISPLAY=:0 XAUTHORITY=/home/kiosk/.Xauthority xrandr` — check display resolution
+
+Quick update after pushing changes (no need to rerun full install):
+```
+cd ~/LJFDDISPLAYS && git pull && sudo cp kiosk.sh /home/kiosk/.xinitrc && sudo systemctl restart kiosk
+```
+
+## Known Gotchas
+
+- Pi OS Lite does not include `git` — install with `sudo apt-get install -y git`
+- Chromium package is `chromium` on Bookworm+, `chromium-browser` on older releases. Both install.sh and kiosk.sh auto-detect.
+- X display commands (xrandr, xset) must run as the `kiosk` user with `DISPLAY=:0 XAUTHORITY=/home/kiosk/.Xauthority`
+- The repo is private — cloning requires a GitHub Personal Access Token or SSH key
 
 ## Do NOT
 

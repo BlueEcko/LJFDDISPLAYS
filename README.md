@@ -35,10 +35,14 @@ ssh pi@ljfd-display-1.local
 ### 3. Install the Kiosk
 
 ```bash
-git clone https://github.com/YOUR_ORG/LJFDDISPLAYS.git
+sudo apt-get install -y git
+git clone https://github.com/BlueEcko/LJFDDISPLAYS.git
 cd LJFDDISPLAYS
 sudo bash install.sh
 ```
+
+Note: Git is not included in Pi OS Lite by default and must be installed first.
+The repo is private — Git will prompt for GitHub credentials (use a [Personal Access Token](https://github.com/settings/tokens) as the password).
 
 ### 4. Configure the URL
 
@@ -71,8 +75,9 @@ Boot → systemd starts kiosk.service
      → startx (as 'kiosk' user, no cursor)
      → .xinitrc (kiosk.sh)
      → disable DPMS/screen blanking
+     → detect screen resolution via xrandr
      → clean Chromium crash flags
-     → exec chromium --kiosk <URL>
+     → exec chromium --kiosk --window-size=WxH <URL>
 
 If Chromium crashes → X session ends → systemd restarts (5s delay)
 ```
@@ -83,9 +88,11 @@ If Chromium crashes → X session ends → systemd restarts (5s delay)
 |------|---------|
 | Change URL | Edit `/boot/firmware/kiosk.conf`, then `sudo systemctl restart kiosk` |
 | View logs | `journalctl -u kiosk.service -f` |
+| Kiosk script log | `cat /var/log/kiosk.log` |
 | Restart display | `sudo systemctl restart kiosk` |
 | Stop display | `sudo systemctl stop kiosk` |
 | Check status | `sudo systemctl status kiosk` |
+| Update kiosk scripts | `cd ~/LJFDDISPLAYS && git pull && sudo cp kiosk.sh /home/kiosk/.xinitrc && sudo systemctl restart kiosk` |
 | SSH in | `ssh pi@<hostname>.local` |
 
 ## Changing the URL Without SSH
@@ -109,7 +116,7 @@ Only 6 packages are installed (with `--no-install-recommends`):
 | `xserver-xorg-input-libinput` | Input driver (required for X to start) |
 | `xinit` | Provides `startx` command |
 | `x11-xserver-utils` | Provides `xset` for DPMS control |
-| `chromium-browser` | Web browser |
+| `chromium` or `chromium-browser` | Web browser (name varies by OS version, auto-detected) |
 
 No desktop environment. No window manager. No cursor utility.
 
@@ -129,18 +136,22 @@ sudo systemctl restart kiosk
 ```
 
 **Screen goes blank after a while:**
-Check that DPMS is disabled:
+Check that DPMS is disabled (must run as kiosk user):
 ```bash
-DISPLAY=:0 xset q | grep -i dpms
+sudo -u kiosk DISPLAY=:0 XAUTHORITY=/home/kiosk/.Xauthority xset q | grep -i dpms
 ```
 Check kernel param:
 ```bash
 cat /proc/cmdline | grep consoleblank
 ```
 
-**Display resolution wrong:**
-Chromium uses `--start-fullscreen` which fills whatever resolution X detects.
-To force a resolution, add to `/boot/firmware/config.txt`:
+**Display not filling the screen:**
+The kiosk script auto-detects resolution via `xrandr` and passes `--window-size` to Chromium.
+To check the detected resolution:
+```bash
+sudo -u kiosk DISPLAY=:0 XAUTHORITY=/home/kiosk/.Xauthority xrandr
+```
+To force a specific resolution, add to `/boot/firmware/config.txt`:
 ```ini
 hdmi_group=2
 hdmi_mode=82   # 1920x1080 60Hz
