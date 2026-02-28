@@ -31,7 +31,8 @@ apt-get update -qq
 echo "[2/7] Installing minimal X11 and Chromium packages..."
 
 # Chromium package name varies: 'chromium-browser' (Bullseye) vs 'chromium' (Bookworm+)
-if apt-cache show chromium-browser &>/dev/null; then
+# Use apt-get --simulate to check actual installability, not just metadata presence
+if apt-get install --simulate chromium-browser &>/dev/null; then
     CHROMIUM_PKG="chromium-browser"
 else
     CHROMIUM_PKG="chromium"
