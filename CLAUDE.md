@@ -21,6 +21,7 @@ Raspberry Pi 5 kiosk display system. Turns a Pi running Pi OS Lite into a full-s
 - `kiosk.sh` — Kiosk launcher. Installed as `/home/kiosk/.xinitrc`. Sources the config, disables DPMS, detects screen resolution via xrandr, cleans Chromium crash state, exec's Chromium with `--window-size` to fill the display.
 - `kiosk.service` — systemd unit. Runs `startx -- -nocursor` as the kiosk user on tty1. `Restart=always` for crash recovery.
 - `kiosk.conf` — URL configuration template. Installed to `/boot/firmware/kiosk.conf`. Two URL slots with an `ACTIVE_URL` selector.
+- `10-modesetting.conf` — X11 config. Installed to `/etc/X11/xorg.conf.d/`. Forces modesetting driver on the correct DRM device (Pi 5 has two: V3D for 3D compute, VC4 for display output).
 
 ## Key Patterns
 
@@ -53,6 +54,8 @@ cd ~/LJFDDISPLAYS && git pull && sudo cp kiosk.sh /home/kiosk/.xinitrc && sudo s
 - Chromium package is `chromium` on Bookworm+, `chromium-browser` on older releases. Both install.sh and kiosk.sh auto-detect.
 - X display commands (xrandr, xset) must run as the `kiosk` user with `DISPLAY=:0 XAUTHORITY=/home/kiosk/.Xauthority`
 - The repo is private — cloning requires a GitHub Personal Access Token or SSH key
+- **Pi 5 GPU**: Has two DRM devices — V3D (`/dev/dri/card0`, 3D-only) and VC4 (`/dev/dri/card1`, display). X picks the wrong one without `10-modesetting.conf`. Do NOT install `xserver-xorg-video-fbdev` — it conflicts with modesetting.
+- **Pi 5 X permissions**: Requires `xserver-xorg-legacy` package (provides `Xorg.wrap`) so `Xwrapper.config` settings (`needs_root_rights=yes`) are honored. Without it, non-root users get "Cannot open /dev/tty0".
 
 ## Do NOT
 

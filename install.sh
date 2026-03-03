@@ -40,7 +40,7 @@ fi
 
 apt-get install --no-install-recommends -y \
     xserver-xorg-core \
-    xserver-xorg-video-fbdev \
+    xserver-xorg-legacy \
     xserver-xorg-input-libinput \
     xinit \
     x11-xserver-utils \
@@ -49,11 +49,11 @@ apt-get install --no-install-recommends -y \
 # --- Step 3: Create kiosk user ---
 echo "[3/7] Creating kiosk user..."
 if ! id "$KIOSK_USER" &>/dev/null; then
-    useradd -m -s /bin/bash -G video,input,tty "$KIOSK_USER"
+    useradd -m -s /bin/bash -G video,input,tty,render "$KIOSK_USER"
     echo "Created user: $KIOSK_USER"
 else
     echo "User $KIOSK_USER already exists, skipping."
-    usermod -aG video,input,tty "$KIOSK_USER"
+    usermod -aG video,input,tty,render "$KIOSK_USER"
 fi
 
 # --- Step 4: Deploy files ---
@@ -71,17 +71,21 @@ fi
 
 install -m 644 "$SCRIPT_DIR/kiosk.service" /etc/systemd/system/kiosk.service
 
+# Pi 5 has two DRM devices: V3D (3D-only, card0) and VC4 (display, card1).
+# X picks the wrong one by default. Force modesetting driver on card1.
+mkdir -p /etc/X11/xorg.conf.d
+install -m 644 "$SCRIPT_DIR/10-modesetting.conf" /etc/X11/xorg.conf.d/10-modesetting.conf
+
 touch /var/log/kiosk.log
 chown "$KIOSK_USER":"$KIOSK_USER" /var/log/kiosk.log
 
 # --- Step 5: Configure X server permissions ---
 echo "[5/7] Configuring X server permissions..."
 XWRAPPER_CONF="/etc/X11/Xwrapper.config"
-if [ -f "$XWRAPPER_CONF" ]; then
-    sed -i 's/^allowed_users=.*/allowed_users=anybody/' "$XWRAPPER_CONF"
-else
-    echo "allowed_users=anybody" > "$XWRAPPER_CONF"
-fi
+cat > "$XWRAPPER_CONF" << 'EOF'
+allowed_users=anybody
+needs_root_rights=yes
+EOF
 
 # --- Step 6: System configuration ---
 echo "[6/7] Configuring system..."
