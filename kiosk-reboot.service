@@ -1,0 +1,6 @@
+[Unit]
+Description=Nightly reboot of LJFD kiosk Pi
+
+[Service]
+Type=oneshot
+ExecStart=/sbin/shutdown -r now

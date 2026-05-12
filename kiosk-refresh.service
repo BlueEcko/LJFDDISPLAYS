@@ -1,0 +1,10 @@
+[Unit]
+Description=Send hard-refresh keystroke (Ctrl+Shift+R) to kiosk Chromium
+After=kiosk.service
+
+[Service]
+Type=oneshot
+User=kiosk
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/kiosk/.Xauthority
+ExecStart=/usr/bin/xdotool key --clearmodifiers ctrl+shift+r

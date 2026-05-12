@@ -14,6 +14,8 @@ Raspberry Pi 5 kiosk display system. Turns a Pi running Pi OS Lite into a full-s
 - **Screen power**: DPMS disabled via `xset` in kiosk.sh; console blanking off via kernel param `consoleblank=0`
 - **Auto-recovery**: systemd `Restart=always` — Chromium exits → X exits → startx exits → systemd restarts
 - **Config**: `/boot/firmware/kiosk.conf` (shell-sourceable, on FAT32 boot partition, editable from any OS)
+- **Nightly reboot**: systemd timer `kiosk-reboot.timer` triggers `shutdown -r now` at 03:00 daily
+- **Hourly refresh**: systemd timer `kiosk-refresh.timer` fires at HH:15 — runs `xdotool key ctrl+shift+r` as the kiosk user to send a hard reload to the focused Chromium window (no Chromium restart, no blank screen)
 
 ## File Roles
 
@@ -22,6 +24,8 @@ Raspberry Pi 5 kiosk display system. Turns a Pi running Pi OS Lite into a full-s
 - `kiosk.service` — systemd unit. Runs `startx -- -nocursor` as the kiosk user on tty1. `Restart=always` for crash recovery.
 - `kiosk.conf` — URL configuration template. Installed to `/boot/firmware/kiosk.conf`. Two URL slots with an `ACTIVE_URL` selector.
 - `10-modesetting.conf` — X11 config. Installed to `/etc/X11/xorg.conf.d/`. Forces modesetting driver on the correct DRM device (Pi 5 has two: V3D for 3D compute, VC4 for display output).
+- `kiosk-reboot.service` / `kiosk-reboot.timer` — Nightly 03:00 reboot. Installed to `/etc/systemd/system/`.
+- `kiosk-refresh.service` / `kiosk-refresh.timer` — Hourly hard refresh at HH:15. The service runs as `kiosk` with `DISPLAY=:0` and invokes `xdotool key ctrl+shift+r`.
 
 ## Key Patterns
 
@@ -42,6 +46,8 @@ Useful commands (on the Pi via SSH):
 - `sudo systemctl restart kiosk` — restart after config change
 - `sudo systemctl status kiosk` — check service status
 - `sudo -u kiosk DISPLAY=:0 XAUTHORITY=/home/kiosk/.Xauthority xrandr` — check display resolution
+- `systemctl list-timers kiosk-*` — verify next reboot/refresh times
+- `sudo systemctl start kiosk-refresh.service` — fire a manual hard refresh now (for testing)
 
 Quick update after pushing changes (no need to rerun full install):
 ```

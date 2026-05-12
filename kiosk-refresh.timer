@@ -1,0 +1,9 @@
+[Unit]
+Description=Trigger hourly hard refresh of kiosk display at HH:15
+
+[Timer]
+OnCalendar=*-*-* *:15:00
+Persistent=false
+
+[Install]
+WantedBy=timers.target

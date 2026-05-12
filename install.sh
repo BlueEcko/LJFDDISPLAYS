@@ -44,6 +44,7 @@ apt-get install --no-install-recommends -y \
     xserver-xorg-input-libinput \
     xinit \
     x11-xserver-utils \
+    xdotool \
     "$CHROMIUM_PKG"
 
 # --- Step 3: Create kiosk user ---
@@ -70,6 +71,10 @@ else
 fi
 
 install -m 644 "$SCRIPT_DIR/kiosk.service" /etc/systemd/system/kiosk.service
+install -m 644 "$SCRIPT_DIR/kiosk-reboot.service" /etc/systemd/system/kiosk-reboot.service
+install -m 644 "$SCRIPT_DIR/kiosk-reboot.timer" /etc/systemd/system/kiosk-reboot.timer
+install -m 644 "$SCRIPT_DIR/kiosk-refresh.service" /etc/systemd/system/kiosk-refresh.service
+install -m 644 "$SCRIPT_DIR/kiosk-refresh.timer" /etc/systemd/system/kiosk-refresh.timer
 
 # Pi 5 has two DRM devices: V3D (3D-only, card0) and VC4 (display, card1).
 # X picks the wrong one by default. Force modesetting driver on card1.
@@ -111,10 +116,12 @@ if [ -f "$CMDLINE" ] && ! grep -q "consoleblank=0" "$CMDLINE"; then
     echo "Added consoleblank=0 to kernel command line."
 fi
 
-# --- Step 7: Enable kiosk service ---
-echo "[7/7] Enabling kiosk service..."
+# --- Step 7: Enable kiosk service and timers ---
+echo "[7/7] Enabling kiosk service and timers..."
 systemctl daemon-reload
 systemctl enable kiosk.service
+systemctl enable --now kiosk-reboot.timer
+systemctl enable --now kiosk-refresh.timer
 
 echo ""
 echo "=== Setup complete ==="
