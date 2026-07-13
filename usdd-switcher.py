@@ -40,6 +40,7 @@ def load_conf():
                 line = line.strip()
                 if line.startswith("USDD_") and "=" in line:
                     k, v = line[5:].split("=", 1)
+                    v = v.split("#", 1)[0]  # drop inline comments (e.g. "25  # note")
                     cfg[k.strip()] = v.strip().strip('"').strip("'")
     except FileNotFoundError:
         log(f"{CONF} not found; using defaults")
