@@ -1,0 +1,17 @@
+[Unit]
+Description=LJFD USDD capture pipeline setup (tc358743 -> /dev/video0)
+After=multi-user.target
+Before=usdd-switcher.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/usdd-capture-setup.sh
+# The USDD may be absent or still latched over-cap at boot; retry until it locks.
+# (exit 2 = no lockable signal). Nightly reboot re-runs this cleanly.
+Restart=on-failure
+RestartSec=15
+
+[Install]
+WantedBy=multi-user.target

@@ -82,6 +82,42 @@ Boot → systemd starts kiosk.service
 If Chromium crashes → X session ends → systemd restarts (5s delay)
 ```
 
+## USDD Alert Switcher (optional)
+
+For sites where a **USDD station-alerting device** must take over the TV during a
+call, fit a **52pi TC358743 HDMI-to-CSI2 board** on the Pi's CAM/DISP1 connector
+and feed the USDD's HDMI into it. The Pi then acts as a software HDMI switcher:
+it shows the dashboard normally, and overlays the live USDD screen full-screen
+when an alert appears, handing back when it clears. No TV CEC and no USDD
+passthrough required — the TV only ever sees the Pi.
+
+`install.sh` deploys this automatically (it adds `dtoverlay=tc358743,cam1` and
+enables `usdd-capture-setup` + `usdd-switcher`). It's inert on Pis with no board
+fitted. After installing **with a live USDD wired in**, calibrate detection:
+
+```bash
+# 1. With the USDD showing its normal IDLE screen:
+sudo usdd-calibrate.sh idle
+
+# 2. Watch the difference reading while a test alert is fired:
+sudo usdd-calibrate.sh measure
+```
+
+Note the idle reading and the alert reading, then edit `/boot/firmware/usdd.conf`:
+set `USDD_ON_THRESHOLD` a little **below** the alert number and
+`USDD_OFF_THRESHOLD` a little **above** the idle number, and restart:
+
+```bash
+sudo systemctl restart usdd-switcher
+```
+
+Bench test the takeover without a real alert: `sudo touch /run/usdd/force-alert`
+(remove the file to hand back). Logs: `journalctl -u usdd-switcher -f` and
+`journalctl -u usdd-capture-setup`.
+
+**Requirement:** the USDD must run at **1080p30** — the shipped EDID enforces this.
+1080p60 exceeds the capture chip's limits and is unstable over the single CSI lane.
+
 ## Daily Operations
 
 | Task | Command |

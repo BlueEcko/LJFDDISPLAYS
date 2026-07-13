@@ -47,6 +47,15 @@ apt-get install --no-install-recommends -y \
     xdotool \
     "$CHROMIUM_PKG"
 
+# USDD capture-switcher dependencies (tc358743 HDMI-to-CSI2 -> dashboard/USDD switch)
+apt-get install --no-install-recommends -y \
+    v4l-utils \
+    python3 \
+    gstreamer1.0-tools \
+    gstreamer1.0-plugins-base \
+    gstreamer1.0-plugins-good \
+    gstreamer1.0-plugins-bad
+
 # --- Step 3: Create kiosk user ---
 echo "[3/7] Creating kiosk user..."
 if ! id "$KIOSK_USER" &>/dev/null; then
@@ -80,6 +89,30 @@ install -m 644 "$SCRIPT_DIR/kiosk-refresh.timer" /etc/systemd/system/kiosk-refre
 # X picks the wrong one by default. Force modesetting driver on card1.
 mkdir -p /etc/X11/xorg.conf.d
 install -m 644 "$SCRIPT_DIR/10-modesetting.conf" /etc/X11/xorg.conf.d/10-modesetting.conf
+
+# --- USDD capture switcher ---
+echo "Deploying USDD capture switcher..."
+install -d -m 755 /etc/usdd
+install -m 644 "$SCRIPT_DIR/1080P30EDID.txt" /etc/usdd/1080P30EDID.txt
+install -m 755 "$SCRIPT_DIR/usdd-capture-setup.sh" /usr/local/sbin/usdd-capture-setup.sh
+install -m 755 "$SCRIPT_DIR/usdd-calibrate.sh" /usr/local/sbin/usdd-calibrate.sh
+install -m 755 "$SCRIPT_DIR/usdd-switcher.py" /usr/local/bin/usdd-switcher.py
+install -m 644 "$SCRIPT_DIR/usdd-capture-setup.service" /etc/systemd/system/usdd-capture-setup.service
+install -m 644 "$SCRIPT_DIR/usdd-switcher.service" /etc/systemd/system/usdd-switcher.service
+
+if [ ! -f /boot/firmware/usdd.conf ]; then
+    install -m 644 "$SCRIPT_DIR/usdd.conf" /boot/firmware/usdd.conf
+    echo "Installed default usdd.conf to /boot/firmware/"
+else
+    echo "usdd.conf already exists on boot partition, not overwriting."
+fi
+
+# tc358743 HDMI-to-CSI2 bridge overlay on the CAM/DISP1 connector (Pi 5)
+CONFIG_TXT="/boot/firmware/config.txt"
+if [ -f "$CONFIG_TXT" ] && ! grep -q "dtoverlay=tc358743" "$CONFIG_TXT"; then
+    printf '\n# LJFD USDD capture: HDMI-to-CSI2 bridge on CAM/DISP1 connector\ndtoverlay=tc358743,cam1\n' >> "$CONFIG_TXT"
+    echo "Added dtoverlay=tc358743,cam1 to config.txt (reboot required)."
+fi
 
 touch /var/log/kiosk.log
 chown "$KIOSK_USER":"$KIOSK_USER" /var/log/kiosk.log
@@ -123,6 +156,10 @@ systemctl enable kiosk.service
 systemctl enable --now kiosk-reboot.timer
 systemctl enable --now kiosk-refresh.timer
 
+# USDD capture switcher (starts on next boot, after the tc358743 overlay loads)
+systemctl enable usdd-capture-setup.service
+systemctl enable usdd-switcher.service
+
 echo ""
 echo "=== Setup complete ==="
 echo ""
@@ -130,5 +167,14 @@ echo "Next steps:"
 echo "  1. Edit /boot/firmware/kiosk.conf with your display URLs"
 echo "  2. Reboot: sudo reboot"
 echo ""
-echo "The display will start automatically on boot."
+echo "The dashboard will start automatically on boot."
+echo ""
+echo "USDD alert switcher (only if a tc358743 HDMI-to-CSI2 board is fitted):"
+echo "  - After reboot with a LIVE USDD wired in, calibrate detection:"
+echo "      sudo usdd-calibrate.sh idle      # on the USDD idle screen"
+echo "      sudo usdd-calibrate.sh measure   # fire a test alert, note the jump"
+echo "    then set thresholds in /boot/firmware/usdd.conf and:"
+echo "      sudo systemctl restart usdd-switcher"
+echo "  - Bench test without an alert: sudo touch /run/usdd/force-alert (rm to hand back)"
+echo ""
 echo "SSH access remains available for remote management."

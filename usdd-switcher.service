@@ -1,0 +1,21 @@
+[Unit]
+Description=LJFD USDD alert switcher (dashboard <-> USDD capture overlay)
+After=usdd-capture-setup.service kiosk.service
+Requires=usdd-capture-setup.service
+Wants=kiosk.service
+
+[Service]
+Type=simple
+# Runs inside the kiosk user's X session (same pattern as kiosk-refresh.service)
+# so the alert video sink overlays Chromium without stopping the kiosk.
+User=kiosk
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/kiosk/.Xauthority
+RuntimeDirectory=usdd
+RuntimeDirectoryMode=0775
+ExecStart=/usr/local/bin/usdd-switcher.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

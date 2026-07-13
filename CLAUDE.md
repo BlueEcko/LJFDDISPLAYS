@@ -27,6 +27,16 @@ Raspberry Pi 5 kiosk display system. Turns a Pi running Pi OS Lite into a full-s
 - `kiosk-reboot.service` / `kiosk-reboot.timer` — Nightly 03:00 reboot. Installed to `/etc/systemd/system/`.
 - `kiosk-refresh.service` / `kiosk-refresh.timer` — Hourly hard refresh at HH:15. The service runs as `kiosk` with `DISPLAY=:0` and invokes `xdotool key ctrl+shift+r`.
 
+### USDD Alert Switcher (optional, needs a 52pi TC358743 HDMI-to-CSI2 board)
+
+- `1080P30EDID.txt` — Single-block EDID advertising only 1920x1080p30. Deployed to `/etc/usdd/`. Presented to the USDD (an EDID-driven Broadcom/Pi source) so it outputs 1080p30 @ 74.25 MHz — under the tc358743 driver's 165 MHz pixel-clock cap (its default 173 MHz CVT 1080p60 is rejected as out-of-range, and 1080p60's bandwidth also crashes the single CSI lane).
+- `usdd-capture-setup.sh` → `/usr/local/sbin/`. Boot-time pipeline bring-up: finds the tc358743 media/subdev nodes (they renumber per boot), sets the EDID (with a ~20 s HPD-low hold to force a latched USDD to re-read), applies DV timings, wires `csi2 -> /dev/video0` as BGR3 1920x1080.
+- `usdd-capture-setup.service` — oneshot, `RemainAfterExit`, retries every 15 s until the signal locks (USDD may be absent/over-cap at boot).
+- `usdd-switcher.py` → `/usr/local/bin/`. The switcher. Runs as the `kiosk` user in the X session (`DISPLAY=:0`, like kiosk-refresh). Watches a downscaled GRAY8 frame; on alert it starts a GStreamer pipeline whose video sink is an X client overlaying Chromium (no kiosk stop, no Chromium reload); hands back on clear/timeout.
+- `usdd-switcher.service` — runs the switcher as `kiosk`, `Requires=usdd-capture-setup.service`, `RuntimeDirectory=usdd`.
+- `usdd.conf` → `/boot/firmware/`. Thresholds, debounce, timeout, reference path, sink. Operator-editable.
+- `usdd-calibrate.sh` → `/usr/local/sbin/`. `idle` saves the reference frame; `measure` prints live MAD so thresholds can be tuned against a real test alert.
+
 ## Key Patterns
 
 - kiosk.sh uses `exec` to replace the shell with Chromium. When Chromium exits, the X session ends, startx exits, and systemd restarts the service.
@@ -62,6 +72,11 @@ cd ~/LJFDDISPLAYS && git pull && sudo cp kiosk.sh /home/kiosk/.xinitrc && sudo s
 - The repo is private — cloning requires a GitHub Personal Access Token or SSH key
 - **Pi 5 GPU**: Has two DRM devices — V3D (`/dev/dri/card0`, 3D-only) and VC4 (`/dev/dri/card1`, display). X picks the wrong one without `10-modesetting.conf`. Do NOT install `xserver-xorg-video-fbdev` — it conflicts with modesetting.
 - **Pi 5 X permissions**: Requires `xserver-xorg-legacy` package (provides `Xorg.wrap`) so `Xwrapper.config` settings (`needs_root_rights=yes`) are honored. Without it, non-root users get "Cannot open /dev/tty0".
+- **USDD capture — pixel-clock cap**: The tc358743 driver caps DV timings at 165 MHz. A live USDD defaults to 1920x1080p60 as a **CVT** timing at 173 MHz → `--query-dv-timings` fails `ENOSPC/ERANGE`. Our 1080p30 EDID pulls it to 74.25 MHz. 1080p60 (148.5 MHz) *does* lock but its bandwidth **crashes the box** over the single CSI-2 lane — so 1080p30 is mandatory, not a preference.
+- **USDD capture — EDID re-read**: A USDD that has been running only re-reads the EDID on a genuine hot-plug. `--set-edid` alone (short HPD blip) is NOT enough; `usdd-capture-setup.sh` does `--clear-edid`, sleeps ~20 s, then `--set-edid`. This adds ~20-30 s to boot before capture is ready.
+- **USDD capture — pipeline formats**: `csi2` pads must be set with `colorspace:srgb` (omitting it → EPIPE/`-32` "Failed to start media pipeline"), the video node must be `BGR3` to match `BGR888_1X24` (RGB3 → "Format mismatch"/`-22`), and the `csi2:4 -> rp1-cfe-csi2_ch0` link must be enabled explicitly.
+- **USDD capture — this v4l2-ctl build** lacks `--fix-edid-checksums` (the flag aborts the whole command). The shipped `1080P30EDID.txt` already has valid checksums, so the flag isn't used.
+- **USDD switcher — display path**: The alert overlay uses a GStreamer **X-client** sink (`glimagesink` by default; `ximagesink`/`xvimagesink` fallbacks in `usdd.conf`) running as the `kiosk` user against `DISPLAY=:0`, so it layers over Chromium without stopping the kiosk. Do NOT switch it to `kmssink` inside the switcher — kmssink needs DRM master and fights X. (`kmssink` is fine only for standalone console tests with the kiosk stopped.)
 
 ## Do NOT
 
