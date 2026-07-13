@@ -108,20 +108,24 @@ class Overlay:
     def __init__(self):
         self.xdisp = Xdisplay.Display()
         s = self.xdisp.screen()
+        self.w, self.h = s.width_in_pixels, s.height_in_pixels
         self.win = s.root.create_window(
-            0, 0, s.width_in_pixels, s.height_in_pixels, 0, s.root_depth,
+            0, 0, self.w, self.h, 0, s.root_depth,
             X.InputOutput, X.CopyFromParent,
             background_pixel=s.black_pixel, override_redirect=1, event_mask=0)
         self.xid = int(self.win.id)
         self.xdisp.sync()          # window exists but is unmapped -> dashboard visible
         self.pipeline = None
-        log(f"overlay window ready xid=0x{self.xid:x} "
-            f"({s.width_in_pixels}x{s.height_in_pixels})")
+        log(f"overlay window ready xid=0x{self.xid:x} ({self.w}x{self.h})")
 
-    def _on_sync(self, bus, msg):
+    def _on_sync(self, bus, msg, *args):   # gi passes a user_data arg -> absorb it
         st = msg.get_structure()
         if st is not None and st.has_name("prepare-window-handle"):
             msg.src.set_window_handle(self.xid)
+            try:
+                msg.src.set_render_rectangle(0, 0, self.w, self.h)
+            except Exception:
+                pass
         return Gst.BusSyncReply.PASS
 
     def show(self, fps, sink):
