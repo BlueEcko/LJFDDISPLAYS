@@ -51,6 +51,10 @@ apt-get install --no-install-recommends -y \
 apt-get install --no-install-recommends -y \
     v4l-utils \
     python3 \
+    python3-gi \
+    python3-xlib \
+    gir1.2-gstreamer-1.0 \
+    gir1.2-gst-plugins-base-1.0 \
     gstreamer1.0-tools \
     gstreamer1.0-plugins-base \
     gstreamer1.0-plugins-good \
