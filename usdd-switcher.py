@@ -3,13 +3,14 @@
 screen appears, then hand back to the kiosk dashboard when it clears.
 
 Design (see CLAUDE.md "USDD Alert Switcher"):
-  * Runs as root (it stops/starts kiosk.service and drives the DRM display).
+  * Runs as the `kiosk` user inside the existing X session (DISPLAY=:0), the
+    same way kiosk-refresh.service does. It never stops the kiosk, so the
+    Chromium dashboard keeps running underneath the whole time.
   * Exactly one GStreamer pipeline owns /dev/video0 at a time:
-      IDLE  -> v4l2src ! (downscaled GRAY8) ! multifilesink       (detection only)
-      ALERT -> v4l2src ! tee ! kmssink (full-screen) + detection feed
-  * On alert onset the kiosk (Chromium/X) is stopped so kmssink can own the
-    HDMI output (kmssink hardware-scales the 1080p capture to fill the 4K panel,
-    which the X software sinks cannot do). On hand-back the kiosk is restarted.
+      IDLE  -> v4l2src ! (downscaled GRAY8) ! multifilesink   (detection only)
+      ALERT -> v4l2src ! tee ! <video sink over Chromium> + (detection feed)
+    The ALERT video sink is an X client, so it overlays the dashboard; killing
+    the pipeline destroys its window and reveals the dashboard again.
   * Detection = mean-absolute-difference of the latest 64x36 GRAY8 frame vs a
     calibrated idle reference. Thresholds/behaviour live in /boot/firmware/usdd.conf.
 
@@ -32,7 +33,7 @@ def log(msg):
 def load_conf():
     cfg = dict(ENABLED="1", ON_THRESHOLD="25", OFF_THRESHOLD="12",
                ON_DEBOUNCE="3", OFF_DEBOUNCE="6", MAX_ALERT_SEC="210",
-               REFERENCE="/etc/usdd/idle.gray", FPS="2")
+               REFERENCE="/etc/usdd/idle.gray", FPS="2", SINK="ximagesink")
     try:
         with open(CONF) as f:
             for line in f:
@@ -46,7 +47,7 @@ def load_conf():
     return cfg
 
 
-def build_pipeline(display, fps):
+def build_pipeline(display, fps, sink):
     src = ["gst-launch-1.0", "-q", "v4l2src", "device=/dev/video0", "io-mode=mmap",
            "!", "video/x-raw,format=BGR,width=1920,height=1080"]
     detect = ["videorate", "!", f"video/x-raw,framerate={fps}/1",
@@ -57,18 +58,18 @@ def build_pipeline(display, fps):
     if display:
         return src + ["!", "tee", "name=t",
                       "t.", "!", "queue", "max-size-buffers=3", "leaky=downstream",
-                      "!", "videoconvert", "!", "kmssink", "force-modesetting=true",
+                      "!", "videoconvert", "!", sink, "force-aspect-ratio=false",
                       "t.", "!", "queue", "!"] + detect
     return src + ["!"] + detect
 
 
-def start_pipeline(display, fps):
+def start_pipeline(display, fps, sink):
     for f in glob.glob(f"{FRAMEDIR}/f*.gray"):
         try:
             os.remove(f)
         except OSError:
             pass
-    return subprocess.Popen(build_pipeline(display, fps),
+    return subprocess.Popen(build_pipeline(display, fps, sink),
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                             preexec_fn=os.setsid)
 
@@ -83,10 +84,6 @@ def stop_pipeline(p):
                 os.killpg(os.getpgid(p.pid), signal.SIGKILL)
             except Exception:
                 pass
-
-
-def kiosk(action):
-    subprocess.run(["systemctl", action, "kiosk"], check=False)
 
 
 def read_latest():
@@ -112,7 +109,7 @@ def main():
         log("USDD_ENABLED=0; switcher idle (capture pipeline stays up). Exiting.")
         return
 
-    fps = cfg["FPS"]
+    fps, sink = cfg["FPS"], cfg["SINK"]
     on_t, off_t = float(cfg["ON_THRESHOLD"]), float(cfg["OFF_THRESHOLD"])
     on_d, off_d = int(cfg["ON_DEBOUNCE"]), int(cfg["OFF_DEBOUNCE"])
     max_alert = float(cfg["MAX_ALERT_SEC"])
@@ -130,10 +127,9 @@ def main():
         log(f"no idle reference at {cfg['REFERENCE']} — run usdd-calibrate.sh. "
             "Content detection disabled; only force-alert / timeout will switch.")
 
-    kiosk("start")   # ensure the dashboard is up (recovers if we died mid-alert)
     state = "IDLE"
-    pipe = start_pipeline(False, fps)
-    log(f"started in IDLE (dashboard); on={on_t} off={off_t}")
+    pipe = start_pipeline(False, fps, sink)
+    log(f"started in IDLE (dashboard); sink={sink} on={on_t} off={off_t}")
     over = under = 0
     alert_since = 0.0
 
@@ -143,7 +139,7 @@ def main():
             if pipe.poll() is not None:
                 log(f"pipeline exited (code {pipe.returncode}); restarting in {state}")
                 time.sleep(1.0)
-                pipe = start_pipeline(state == "ALERT", fps)
+                pipe = start_pipeline(state == "ALERT", fps, sink)
                 continue
 
             forced = os.path.exists(FORCE)
@@ -154,28 +150,24 @@ def main():
                 hot = forced or (diff is not None and diff >= on_t)
                 over = over + 1 if hot else 0
                 if over >= (1 if forced else on_d):
-                    log(f"ALERT onset (mad={diff}, forced={forced}) -> kiosk stop, kmssink up")
+                    log(f"ALERT onset (mad={diff}, forced={forced}) -> taking over")
                     stop_pipeline(pipe)
-                    kiosk("stop")
-                    time.sleep(1.5)          # let X fully release the DRM device
-                    pipe = start_pipeline(True, fps)
+                    pipe = start_pipeline(True, fps, sink)
                     state, alert_since, under = "ALERT", time.time(), 0
             else:  # ALERT
                 if forced:
-                    cool = False             # forced alert holds until the file is removed
+                    cool = False           # forced alert holds until the file is removed
                 elif diff is not None:
                     cool = diff <= off_t
                 else:
-                    cool = False             # no reference: rely on the safety timeout
+                    cool = False           # no reference: rely on the safety timeout
                 under = under + 1 if cool else 0
                 timed_out = (time.time() - alert_since) >= max_alert
                 cleared_force = (not forced) and diff is None  # bench force removed
                 if (under >= off_d) or timed_out or cleared_force:
-                    log(f"hand back (mad={diff}, timeout={timed_out}) -> kmssink down, kiosk start")
+                    log(f"hand back to dashboard (mad={diff}, timeout={timed_out})")
                     stop_pipeline(pipe)
-                    time.sleep(0.5)          # let kmssink release the DRM device
-                    kiosk("start")
-                    pipe = start_pipeline(False, fps)
+                    pipe = start_pipeline(False, fps, sink)
                     state, over = "IDLE", 0
     except KeyboardInterrupt:
         pass

@@ -49,6 +49,18 @@ fi
 # Binary name varies: 'chromium-browser' (Bullseye) vs 'chromium' (Bookworm+)
 CHROMIUM_BIN=$(command -v chromium-browser 2>/dev/null || command -v chromium)
 
+# Optionally force the HDMI output mode (e.g. FORCE_RESOLUTION="1920x1080" in
+# kiosk.conf). Used so the display matches the USDD capture resolution for the
+# alert switcher (1080p overlay, no scaling). Empty = the display's native mode.
+if [ -n "${FORCE_RESOLUTION:-}" ]; then
+    XOUT=$(xrandr | awk '/ connected/{print $1; exit}')
+    if xrandr --output "$XOUT" --mode "$FORCE_RESOLUTION"; then
+        echo "$(date): Forced resolution ${FORCE_RESOLUTION} on ${XOUT}" >> "$LOG"
+    else
+        echo "$(date): WARN could not set ${FORCE_RESOLUTION} on ${XOUT}" >> "$LOG"
+    fi
+fi
+
 # Get screen resolution to force Chromium to fill the display
 SCREEN_RES=$(xrandr | grep '\*' | awk '{print $1}')
 SCREEN_W=$(echo "$SCREEN_RES" | cut -d'x' -f1)

@@ -6,10 +6,13 @@ Wants=kiosk.service
 
 [Service]
 Type=simple
-# Runs as root: it stops/starts kiosk.service and drives the DRM display via
-# kmssink (which hardware-scales the 1080p capture to fill the 4K panel — the
-# X software sinks cannot). The kiosk yields the screen for the alert's duration.
+# Runs inside the kiosk user's X session (same pattern as kiosk-refresh.service)
+# so the alert video sink overlays Chromium without stopping the kiosk.
+User=kiosk
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/kiosk/.Xauthority
 RuntimeDirectory=usdd
+RuntimeDirectoryMode=0775
 ExecStart=/usr/local/bin/usdd-switcher.py
 Restart=always
 RestartSec=5
