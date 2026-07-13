@@ -74,26 +74,6 @@ def start_pipeline(display, fps, sink):
                             preexec_fn=os.setsid)
 
 
-def snap_windows():
-    """No window manager places the overlay window, so ximagesink briefly maps it
-    off-position before settling. Pin every visible window to 0,0/fullscreen for a
-    few seconds after takeover so the capture is aligned from the first frame.
-    (Moving Chromium — already fullscreen — is a harmless no-op; we don't raise, so
-    stacking order is preserved and the newest window, the sink, stays on top.)"""
-    script = (
-        "for i in $(seq 1 25); do "
-        "  for w in $(xdotool search --onlyvisible --class '.' 2>/dev/null); do "
-        "    xdotool windowmove \"$w\" 0 0 windowsize \"$w\" 1920 1080 2>/dev/null; "
-        "  done; sleep 0.15; "
-        "done"
-    )
-    try:
-        subprocess.Popen(["bash", "-c", script], stdout=subprocess.DEVNULL,
-                         stderr=subprocess.DEVNULL, preexec_fn=os.setsid)
-    except Exception:
-        pass
-
-
 def stop_pipeline(p):
     if p and p.poll() is None:
         try:
@@ -160,8 +140,6 @@ def main():
                 log(f"pipeline exited (code {pipe.returncode}); restarting in {state}")
                 time.sleep(1.0)
                 pipe = start_pipeline(state == "ALERT", fps, sink)
-                if state == "ALERT":
-                    snap_windows()
                 continue
 
             forced = os.path.exists(FORCE)
@@ -175,7 +153,6 @@ def main():
                     log(f"ALERT onset (mad={diff}, forced={forced}) -> taking over")
                     stop_pipeline(pipe)
                     pipe = start_pipeline(True, fps, sink)
-                    snap_windows()
                     state, alert_since, under = "ALERT", time.time(), 0
             else:  # ALERT
                 if forced:
