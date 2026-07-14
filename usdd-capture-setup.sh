@@ -29,7 +29,16 @@ VIDNODE=$(media-ctl -d "$MEDIA" -e "rp1-cfe-csi2_ch0")
 [ -z "$VIDNODE" ] && VIDNODE=/dev/video0
 log "media=$MEDIA entity='$ENTITY' subdev=$SUBDEV video=$VIDNODE"
 
-locked() { v4l2-ctl -d "$SUBDEV" --query-dv-timings >/dev/null 2>&1; }
+# "Locked" means a valid signal AT 1080p30 (pixel clock <= ~80 MHz). 1080p60
+# (148.5 MHz) also locks under the driver's 165 MHz cap, but its bandwidth
+# crashes streaming on the single CSI-2 lane — so we insist on 30 and force the
+# HPD re-read otherwise (the USDD only honours our 1080p30-only EDID on a full
+# hot-plug; a short --set-edid leaves it at 60).
+locked() {
+    local pc
+    pc=$(v4l2-ctl -d "$SUBDEV" --query-dv-timings 2>/dev/null | awk '/Pixelclock/{print $2}')
+    [ -n "$pc" ] && [ "$pc" -le 80000000 ]
+}
 
 # --- present EDID; force a full HPD cycle if the source is latched over-cap ---
 v4l2-ctl -d "$SUBDEV" --set-edid=file="$EDID_FILE" >/dev/null 2>&1
