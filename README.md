@@ -91,32 +91,51 @@ it shows the dashboard normally, and overlays the live USDD screen full-screen
 when an alert appears, handing back when it clears. No TV CEC and no USDD
 passthrough required — the TV only ever sees the Pi.
 
-`install.sh` deploys this automatically (it adds `dtoverlay=tc358743,cam1` and
-enables `usdd-capture-setup` + `usdd-switcher`). It's inert on Pis with no board
-fitted. After installing **with a live USDD wired in**, calibrate detection:
+`install.sh` deploys the whole switcher automatically (scripts, services, the
+1080p30 EDID, `dtoverlay=tc358743,cam1`, and enables both services). On a Pi with
+**no board fitted** it stays dormant and safe — `usdd-capture-setup` just finds no
+capture device and the switcher never starts; the dashboard runs normally.
 
-```bash
-# 1. With the USDD showing its normal IDLE screen:
-sudo usdd-calibrate.sh idle
+### Bringing up a device that has the board
 
-# 2. Watch the difference reading while a test alert is fired:
-sudo usdd-calibrate.sh measure
-```
+1. Fit the 52pi board on **CAM/DISP1**, HDMI from the USDD into the board, and run
+   `install.sh` (or `git pull` + re-run it on an already-installed Pi). Reboot so
+   the `tc358743` overlay loads.
+2. **Power-cycle the USDD device.** This is required — the USDD only re-reads the
+   1080p30 EDID on a full power-up, not when the Pi toggles hot-plug. Until it
+   does, it may output 1080p60, which the switcher **deliberately refuses** (60 fps
+   over the single CSI-2 lane wedges the Pi).
+3. Confirm capture locked at 30 fps:
+   ```bash
+   journalctl -u usdd-capture-setup -b | grep -E 'locked|ready'   # want 74250000 Hz (30 fps)
+   sudo systemctl restart usdd-capture-setup usdd-switcher          # if it hadn't locked before the power-cycle
+   ```
+4. **Calibrate detection** with the USDD on its normal idle screen:
+   ```bash
+   sudo usdd-calibrate.sh idle           # saves the idle reference (required for auto-detection)
+   sudo usdd-calibrate.sh measure        # optional: fire a test alert, watch the number jump
+   ```
+   The shipped thresholds (`USDD_ON_THRESHOLD=0.9`, `USDD_OFF_THRESHOLD=0.6` in
+   `/boot/firmware/usdd.conf`) suit the current USDD (idle ~0.4, alerts ~1.3–4.1).
+   Adjust per site if `measure` shows different numbers, then
+   `sudo systemctl restart usdd-switcher`.
+5. Bench test without a real alert: `sudo touch /run/usdd/force-alert` (takes over),
+   `sudo rm /run/usdd/force-alert` (hands back).
 
-Note the idle reading and the alert reading, then edit `/boot/firmware/usdd.conf`:
-set `USDD_ON_THRESHOLD` a little **below** the alert number and
-`USDD_OFF_THRESHOLD` a little **above** the idle number, and restart:
+Logs: `journalctl -u usdd-switcher -f`, `journalctl -u usdd-capture-setup`.
 
-```bash
-sudo systemctl restart usdd-switcher
-```
+**Key requirement:** the USDD must run at **1080p30** — the shipped EDID enforces
+it and capture-setup refuses anything else. 1080p60 (148.5 MHz) locks under the
+chip's cap but its bandwidth crashes the single CSI-2 lane.
 
-Bench test the takeover without a real alert: `sudo touch /run/usdd/force-alert`
-(remove the file to hand back). Logs: `journalctl -u usdd-switcher -f` and
-`journalctl -u usdd-capture-setup`.
+### If a device ever hangs on boot
 
-**Requirement:** the USDD must run at **1080p30** — the shipped EDID enforces this.
-1080p60 exceeds the capture chip's limits and is unstable over the single CSI lane.
+If a Pi with the board ever wedges at boot on `usdd-capture-setup` (e.g. a driver
+hang), you don't need console access: power off, put the SD card in any computer,
+open **`cmdline.txt`** on the FAT32 `bootfs` partition, and append (same line, no
+newline) `systemd.mask=usdd-capture-setup.service systemd.mask=usdd-switcher.service`.
+Boot, fix, then remove the masks. (`capture-setup` also has a 90 s start timeout so
+it can't block boot indefinitely.)
 
 ## Daily Operations
 
