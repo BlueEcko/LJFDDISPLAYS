@@ -7,6 +7,8 @@ StartLimitIntervalSec=0
 [Service]
 Type=oneshot
 RemainAfterExit=yes
+# Never let a wedged v4l2/media-ctl call block boot indefinitely.
+TimeoutStartSec=90
 ExecStart=/usr/local/sbin/usdd-capture-setup.sh
 # The USDD may be absent or still latched over-cap at boot; retry until it locks.
 # (exit 2 = no lockable signal). Nightly reboot re-runs this cleanly.

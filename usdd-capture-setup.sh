@@ -37,7 +37,9 @@ log "media=$MEDIA entity='$ENTITY' subdev=$SUBDEV video=$VIDNODE"
 locked() {
     local pc
     pc=$(v4l2-ctl -d "$SUBDEV" --query-dv-timings 2>/dev/null | awk '/Pixelclock/{print $2}')
-    [ -n "$pc" ] && [ "$pc" -ge 60000000 ] && [ "$pc" -le 160000000 ]
+    # Require ~1080p30 (60-80MHz). If the USDD refuses 30 and holds 60 (148.5MHz),
+    # FAIL rather than configure/stream it — 1080p60 wedges the Pi on the 1-lane CSI.
+    [ -n "$pc" ] && [ "$pc" -ge 60000000 ] && [ "$pc" -le 80000000 ]
 }
 
 # --- present EDID; force a full HPD cycle if the source is latched over-cap ---
