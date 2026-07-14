@@ -37,7 +37,7 @@ log "media=$MEDIA entity='$ENTITY' subdev=$SUBDEV video=$VIDNODE"
 locked() {
     local pc
     pc=$(v4l2-ctl -d "$SUBDEV" --query-dv-timings 2>/dev/null | awk '/Pixelclock/{print $2}')
-    [ -n "$pc" ] && [ "$pc" -le 80000000 ]
+    [ -n "$pc" ] && [ "$pc" -ge 60000000 ] && [ "$pc" -le 80000000 ]
 }
 
 # --- present EDID; force a full HPD cycle if the source is latched over-cap ---
