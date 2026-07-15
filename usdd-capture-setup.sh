@@ -43,17 +43,18 @@ locked() {
 }
 
 # --- present EDID; force a full HPD cycle if the source is latched over-cap ---
-v4l2-ctl -d "$SUBDEV" --set-edid=file="$EDID_FILE" >/dev/null 2>&1
-sleep 2
+# NEVER do a clear-edid / long-HPD "force re-read" automatically: it SEVERS this
+# USDD's output and it won't recover without its own power-cycle. The USDD holds
+# its mode across Pi reboots, so if a 1080p30 signal is already present, use it
+# untouched. Only (re)present the EDID when there is no good signal — nothing to
+# lose then, and it primes the EDID so the next USDD power-up selects 1080p30.
 if ! locked; then
-    log "signal absent/over-cap; forcing ~20 s HPD low so the USDD re-reads EDID"
-    v4l2-ctl -d "$SUBDEV" --clear-edid >/dev/null 2>&1
-    sleep 20
+    log "no 1080p30 signal yet; presenting EDID (does not disturb a live signal)"
     v4l2-ctl -d "$SUBDEV" --set-edid=file="$EDID_FILE" >/dev/null 2>&1
-    for _ in $(seq 1 25); do locked && break; sleep 1; done
+    for _ in $(seq 1 10); do locked && break; sleep 1; done
 fi
 if ! locked; then
-    log "ERROR: no lockable signal (USDD absent, or won't drop under 165 MHz)."
+    log "ERROR: no 1080p30 signal. Power-cycle the USDD — it re-reads the EDID only on its own power-up."
     v4l2-ctl -d "$SUBDEV" --log-status >/dev/null 2>&1
     dmesg | grep -i 'Detected format' | tail -1 | sed 's/^/[usdd-setup] /'
     exit 2
