@@ -1,6 +1,9 @@
 [Unit]
 Description=LJFD USDD capture pipeline setup (tc358743 -> /dev/video0)
-After=multi-user.target
+# Order before the switcher, but do NOT depend on multi-user.target: that made a
+# cycle (switcher is WantedBy=multi-user.target and After=this), which systemd
+# resolves by dropping the switcher's start job. Device readiness is handled by
+# Restart=on-failure retries instead.
 Before=usdd-switcher.service
 StartLimitIntervalSec=0
 
