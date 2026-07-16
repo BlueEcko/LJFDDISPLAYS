@@ -98,29 +98,32 @@ capture device and the switcher never starts; the dashboard runs normally.
 
 ### Bringing up a device that has the board
 
-1. Fit the 52pi board on **CAM/DISP1**, HDMI from the USDD into the board, and run
-   `install.sh` (or `git pull` + re-run it on an already-installed Pi). Reboot so
-   the `tc358743` overlay loads.
-2. **Power-cycle the USDD device.** This is required — the USDD only re-reads the
-   1080p30 EDID on a full power-up, not when the Pi toggles hot-plug. Until it
-   does, it may output 1080p60, which the switcher **deliberately refuses** (60 fps
-   over the single CSI-2 lane wedges the Pi).
-3. Confirm capture locked at 30 fps:
+1. **With the Pi powered off**, fit the 52pi board on **CAM/DISP1** (seat the CSI
+   ribbon firmly at both ends), and run the USDD's HDMI into the board. Power on.
+2. Install and reboot so the `tc358743` overlay loads:
    ```bash
-   journalctl -u usdd-capture-setup -b | grep -E 'locked|ready'   # want 74250000 Hz (30 fps)
-   sudo systemctl restart usdd-capture-setup usdd-switcher          # if it hadn't locked before the power-cycle
+   sudo apt-get update && sudo apt-get install -y git
+   git clone https://github.com/BlueEcko/LJFDDISPLAYS.git && cd LJFDDISPLAYS
+   sudo bash install.sh && sudo reboot
    ```
-4. **Calibrate detection** with the USDD on its normal idle screen:
+   (Existing kiosk device: `git fetch origin && git reset --hard origin/main && sudo bash install.sh && sudo reboot`.)
+3. **Power-cycle the USDD device**, wait ~45 s. Required — the USDD only re-reads
+   the 1080p30 EDID on a full power-up, not when the Pi toggles hot-plug; until it
+   does it outputs 1080p60, which the switcher **deliberately refuses** (60 fps over
+   the CSI-2 lane wedges the Pi).
+4. Run the one-shot bring-up — it checks the board is detected, forces 1080p,
+   brings the pipeline up at 30 fps, and captures the idle reference (with the USDD
+   on its **normal idle screen**), stopping with a clear message if anything's off:
    ```bash
-   sudo usdd-calibrate.sh idle           # saves the idle reference (required for auto-detection)
-   sudo usdd-calibrate.sh measure        # optional: fire a test alert, watch the number jump
+   sudo usdd-setup.sh
    ```
-   The shipped thresholds (`USDD_ON_THRESHOLD=0.9`, `USDD_OFF_THRESHOLD=0.6` in
-   `/boot/firmware/usdd.conf`) suit the current USDD (idle ~0.4, alerts ~1.3–4.1).
-   Adjust per site if `measure` shows different numbers, then
-   `sudo systemctl restart usdd-switcher`.
-5. Bench test without a real alert: `sudo touch /run/usdd/force-alert` (takes over),
-   `sudo rm /run/usdd/force-alert` (hands back).
+5. Bench test: `sudo touch /run/usdd/force-alert` (takes over), `sudo rm /run/usdd/force-alert`
+   (hands back). Then reboot and confirm both services come up on their own.
+
+The shipped thresholds (`USDD_ON_THRESHOLD=0.9` / `OFF 0.6` in `/boot/firmware/usdd.conf`)
+suit the current USDD (idle ~0.4, alerts ~1.3–4.1). If a site differs, run
+`sudo usdd-calibrate.sh measure`, fire a test alert, adjust, then
+`sudo systemctl restart usdd-switcher`.
 
 Logs: `journalctl -u usdd-switcher -f`, `journalctl -u usdd-capture-setup`.
 

@@ -100,6 +100,7 @@ install -d -m 755 /etc/usdd
 install -m 644 "$SCRIPT_DIR/1080P30EDID.txt" /etc/usdd/1080P30EDID.txt
 install -m 755 "$SCRIPT_DIR/usdd-capture-setup.sh" /usr/local/sbin/usdd-capture-setup.sh
 install -m 755 "$SCRIPT_DIR/usdd-calibrate.sh" /usr/local/sbin/usdd-calibrate.sh
+install -m 755 "$SCRIPT_DIR/usdd-setup.sh" /usr/local/sbin/usdd-setup.sh
 install -m 755 "$SCRIPT_DIR/usdd-switcher.py" /usr/local/bin/usdd-switcher.py
 install -m 644 "$SCRIPT_DIR/usdd-capture-setup.service" /etc/systemd/system/usdd-capture-setup.service
 install -m 644 "$SCRIPT_DIR/usdd-switcher.service" /etc/systemd/system/usdd-switcher.service
