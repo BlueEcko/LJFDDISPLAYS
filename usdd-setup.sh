@@ -14,12 +14,10 @@ hdr() { echo; echo "==> $*"; }
 ok()  { echo "    [ OK ] $*"; }
 die() { echo "    [FAIL] $*"; echo; exit 1; }
 
-# --- 1. capture board present? ---
+# --- 1. capture board present? (check the live media graph, not dmesg history) ---
 hdr "1/4  Capture board"
-dmesg | grep -qi 'tc358743.*found' \
-    || die "tc358743 not detected — the CSI ribbon isn't seated. Power OFF, reseat both ends, reboot, retry."
 MEDIA=""; for m in /dev/media*; do media-ctl -d "$m" -p 2>/dev/null | grep -q tc358743 && { MEDIA="$m"; break; }; done
-[ -n "$MEDIA" ] || die "tc358743 media node not found."
+[ -n "$MEDIA" ] || die "tc358743 not detected — CSI ribbon not seated. Power OFF, reseat both ends, reboot, retry."
 SUB=$(media-ctl -d "$MEDIA" -e "tc358743 11-000f")
 [ -n "$SUB" ] || die "could not resolve tc358743 subdev."
 ok "board detected ($SUB)"

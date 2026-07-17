@@ -54,9 +54,9 @@ if ! locked; then
     for _ in $(seq 1 10); do locked && break; sleep 1; done
 fi
 if ! locked; then
+    # Do NOT call --log-status here: it dumps ~50 lines to the kernel log on every
+    # 15s retry, flooding dmesg/journald while waiting for a USDD power-cycle.
     log "ERROR: no 1080p30 signal. Power-cycle the USDD — it re-reads the EDID only on its own power-up."
-    v4l2-ctl -d "$SUBDEV" --log-status >/dev/null 2>&1
-    dmesg | grep -i 'Detected format' | tail -1 | sed 's/^/[usdd-setup] /'
     exit 2
 fi
 log "locked: $(v4l2-ctl -d "$SUBDEV" --query-dv-timings | grep -Ei 'width|height|frames' | tr '\n' ' ')"
