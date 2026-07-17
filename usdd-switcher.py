@@ -129,6 +129,13 @@ class Overlay:
         return Gst.BusSyncReply.PASS
 
     def show(self, fps, sink):
+        # The display can resize after we start (the kiosk applies FORCE_RESOLUTION
+        # a few seconds into boot), so size the window to the CURRENT screen at alert
+        # time — not whatever it was when __init__ ran. Otherwise a window created at
+        # native 4K stays 4K on a 1080p screen and the video renders off-center.
+        rg = self.xdisp.screen().root.get_geometry()
+        self.w, self.h = rg.width, rg.height
+        self.win.configure(x=0, y=0, width=self.w, height=self.h)
         self.win.map()
         self.win.configure(stack_mode=X.Above)   # newest map is on top anyway
         self.xdisp.sync()
